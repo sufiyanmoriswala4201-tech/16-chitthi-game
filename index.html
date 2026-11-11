@@ -62,8 +62,9 @@ li{padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-botto
   <div class="code" id="lc"></div>
   <ul id="pl"></ul>
   <div id="hostbox" class="hide">
-    <div style="font-size:14px;color:var(--mut)">Chitthi ke naam:</div>
-    <div id="cn"></div>
+    <div style="font-size:13px;color:var(--mut);text-align:center;margin-bottom:10px">
+      Har player ke naam ki chitthi hogi. Jo N chitthi ek hi naam ki jama karega, wo jeetega!
+    </div>
     <button class="big" id="go">Game shuru karo</button>
   </div>
   <div id="wait" class="log hide">Admin ke game shuru karne ka intezaar...</div>
@@ -93,8 +94,7 @@ var myName = '';
 var currentCode = null;
 var S = null;
 var busy = false;
-var els = [], sc = [], tw = { w: 0, h: 0 }, cn = [];
-var FR = ["Aam","Kela","Seb","Angoor","Santra","Papita","Anar","Nimbu","Cheeku","Jamun","Kiwi","Tarbooz"];
+var els = [], sc = [], tw = { w: 0, h: 0 };
 
 function $(i) { return document.getElementById(i); }
 function show(id) { ["home","lobby","gm"].forEach(s => $(s).classList.toggle("hide", s !== id)); }
@@ -122,7 +122,6 @@ function nameOk() {
 }
 function createGame() {
   if (!nameOk()) return;
-  cn = [];
   socket.emit('create', { uid, name: myName }, (res) => {
     if (res.ok) currentCode = res.code;
     else err("Game nahi ban paya");
@@ -132,7 +131,6 @@ function joinGame() {
   if (!nameOk()) return;
   var c = $("cd").value.trim().toUpperCase();
   if (c.length !== 4) { err("4 akshar ka code daalo"); return; }
-  cn = [];
   socket.emit('join', { uid, name: myName, code: c }, (res) => {
     if (res.ok) currentCode = res.code;
     else err(res.error || "Judne mein dikkat");
@@ -141,9 +139,7 @@ function joinGame() {
 function startGame() {
   if (!S || S.host !== uid) return;
   var n = S.order.length; if (n < 2) return;
-  var names = [];
-  for (var i = 0; i < n; i++) names.push((cn[i] || "").trim() || FR[i]);
-  socket.emit('start', { uid, code: currentCode, names });
+  socket.emit('start', { uid, code: currentCode });
 }
 function scatterNow() { socket.emit('scatter', { uid, code: currentCode }); }
 function pickChit(i) {
@@ -179,17 +175,6 @@ function renderLobby() {
   $("hostbox").classList.toggle("hide", !isH);
   $("wait").classList.toggle("hide", isH);
   if (isH) {
-    for (var i = 0; i < n; i++) if (!cn[i]) cn[i] = FR[i];
-    var box = $("cn");
-    if (box.dataset.n !== String(n)) {
-      box.innerHTML = ""; box.dataset.n = n;
-      for (var j = 0; j < n; j++) {
-        var inp = document.createElement("input");
-        inp.value = cn[j]; inp.maxLength = 10; inp.style.marginTop = "6px";
-        inp.oninput = (function(k, el) { return function() { cn[k] = el.value; }; })(j, inp);
-        box.appendChild(inp);
-      }
-    }
     $("go").disabled = n < 2;
     $("go").textContent = n < 2 ? "Kam se kam 2 khiladi chahiye" : "Game shuru karo (" + n + " khiladi)";
   }
@@ -276,7 +261,7 @@ function renderGame() {
   if (S.stage === "done") {
     var w = S.winner;
     $("ot").textContent = w === uid ? "Aap jeet gaye! 🎉" : pname(w) + " jeet gaya!";
-    $("od").textContent = S.names[S.hands[w][0]] + " ki " + N + " sarkhi chitthi mil gayi.";
+    $("od").textContent = S.names[S.hands[w][0]] + " ki " + N + " chitthi mil gayi.";
     $("again").classList.toggle("hide", !isH);
     ov.classList.remove("hide");
   } else ov.classList.add("hide");
