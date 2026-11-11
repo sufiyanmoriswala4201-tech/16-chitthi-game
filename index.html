@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sola Chitthi</title>
+<style>
+:root{--bg:#fff8e7;--fg:#2b2118;--card:#ffffff;--mut:#7a6a58;--acc:#c2410c;--line:#e8d9bd}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1712;--fg:#f4ead8;--card:#2a231b;--mut:#b5a48c;--acc:#fb923c;--line:#4a3d2d;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:480px;margin:0 auto;padding:16px}
+h1{margin:4px 0 2px;font-size:26px;text-align:center}
+.sub{text-align:center;color:var(--mut);font-size:14px;margin-bottom:14px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 4px}
+input{width:100%;padding:10px 12px;font-size:16px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button.big{width:100%;margin-top:12px;padding:13px;font-size:17px;font-weight:700;border:0;border-radius:12px;background:var(--acc);color:#fff}
+button.big:disabled{opacity:.5}
+.row{display:flex;gap:8px}.row input{flex:1}.row button{width:auto;margin-top:0;padding:10px 16px}
+.code{font-size:40px;font-weight:800;letter-spacing:6px;text-align:center;color:var(--acc);margin:4px 0}
+ul{list-style:none;margin:8px 0;padding:0}
+li{padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px}
+.strip{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:10px}
+.pl{border:2px solid var(--line);border-radius:12px;padding:5px 9px;font-size:13px;background:var(--card);text-align:center}
+.pl.on{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 25%,transparent)}
+.log{min-height:44px;text-align:center;font-size:15px;margin:6px 0;color:var(--mut)}
+.table{position:relative;width:100%;aspect-ratio:400/340;border:2px dashed var(--line);border-radius:16px;background:var(--card);overflow:hidden;margin-bottom:10px}
+.fold{position:absolute;padding:0;border:0;border-radius:3px;background:#f5e6c4;box-shadow:0 2px 0 rgba(0,0,0,.3);transition:all .7s ease}
+.fold::after{content:"";position:absolute;left:12%;right:12%;top:50%;height:2px;background:#d6bf8c}
+.me{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px 8px}
+.me.on{border-color:var(--acc)}
+.me h2{margin:0 0 10px;font-size:15px;text-align:center}
+.hand{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chit{min-width:66px;padding:14px 10px;border-radius:6px;font-size:16px;font-weight:700;border:0;color:#2b2118;box-shadow:0 2px 0 rgba(0,0,0,.25);transform:rotate(-1.5deg)}
+.chit:nth-child(even){transform:rotate(1.5deg)}
+.chit:disabled{opacity:.6}
+.chit:not(:disabled):active{transform:scale(.94)}
+.over{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.over .panel{text-align:center;max-width:340px;margin:0}
+.over h2{margin:0 0 6px;font-size:26px}
+.msg{text-align:center;color:var(--acc);font-size:14px;min-height:20px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Sola Chitthi</h1>
+<div class="sub">N khiladi, N chitthi. N sarkhi chitthi = jeet!</div>
+
+<div id="home" class="panel">
+  <label>Aapka naam</label><input id="nm" maxlength="12" placeholder="Naam likho">
+  <div id="acts">
+    <button class="big" id="mk">Naya game banao (admin)</button>
+    <label style="margin-top:16px">Ya dost ka code daalo</label>
+    <div class="row"><input id="cd" maxlength="4" placeholder="CODE" style="text-transform:uppercase"><button class="big" id="jn">Judo</button></div>
+  </div>
+</div>
+
+<div id="lobby" class="panel hide">
+  <div class="sub" style="margin:0">Game code (dosto ko bhejo)</div>
+  <div class="code" id="lc"></div>
+  <ul id="pl"></ul>
+  <div id="hostbox" class="hide">
+    <div style="font-size:14px;color:var(--mut)">Chitthi ke naam:</div>
+    <div id="cn"></div>
+    <button class="big" id="go">Game shuru karo</button>
+  </div>
+  <div id="wait" class="log hide">Admin ke game shuru karne ka intezaar...</div>
+</div>
+
+<div id="gm" class="hide">
+  <div class="strip" id="strip"></div>
+  <div class="log" id="log"></div>
+  <div class="table" id="table"></div>
+  <button class="big hide" id="scat">Chitthi furkao 🎲</button>
+  <div class="me" id="me"><h2 id="mh"></h2><div class="hand" id="hand"></div></div>
+</div>
+
+<div id="over" class="over hide"><div class="panel"><h2 id="ot"></h2><div id="od"></div><button class="big hide" id="again">Naya round</button></div></div>
+<div class="msg" id="msg"></div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+var socket = io();
+var uid = localStorage.getItem('uid');
+if (!uid) {
+  uid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('uid', uid);
+}
+var myName = '';
+var currentCode = null;
+var S = null;
+var busy = false;
+var els = [], sc = [], tw = { w: 0, h: 0 }, cn = [];
+var FR = ["Aam","Kela","Seb","Angoor","Santra","Papita","Anar","Nimbu","Cheeku","Jamun","Kiwi","Tarbooz"];
+
+function $(i) { return document.getElementById(i); }
+function show(id) { ["home","lobby","gm"].forEach(s => $(s).classList.toggle("hide", s !== id)); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function err(t) { $("msg").textContent = t; setTimeout(() => { $("msg").textContent = ""; }, 4000); }
+function pname(u) { return S && S.players[u] ? S.players[u].name : "Khiladi"; }
+function colr(v, N) { return "hsl(" + Math.round(v * 360 / N) + ",70%,82%)"; }
+
+$("nm").value = localStorage.getItem('nm') || '';
+
+socket.on('state', (s) => { S = s; currentCode = s.code; render(); });
+
+socket.on('connect', () => {
+  if (currentCode && myName) {
+    socket.emit('join', { uid, name: myName, code: currentCode }, (res) => {
+      if (!res.ok) { currentCode = null; S = null; show("home"); }
+    });
+  }
+});
+
+function nameOk() {
+  myName = $("nm").value.trim();
+  if (!myName) { err("Pehle apna naam likho"); return false; }
+  localStorage.setItem('nm', myName); return true;
+}
+function createGame() {
+  if (!nameOk()) return;
+  cn = [];
+  socket.emit('create', { uid, name: myName }, (res) => {
+    if (res.ok) currentCode = res.code;
+    else err("Game nahi ban paya");
+  });
+}
+function joinGame() {
+  if (!nameOk()) return;
+  var c = $("cd").value.trim().toUpperCase();
+  if (c.length !== 4) { err("4 akshar ka code daalo"); return; }
+  cn = [];
+  socket.emit('join', { uid, name: myName, code: c }, (res) => {
+    if (res.ok) currentCode = res.code;
+    else err(res.error || "Judne mein dikkat");
+  });
+}
+function startGame() {
+  if (!S || S.host !== uid) return;
+  var n = S.order.length; if (n < 2) return;
+  var names = [];
+  for (var i = 0; i < n; i++) names.push((cn[i] || "").trim() || FR[i]);
+  socket.emit('start', { uid, code: currentCode, names });
+}
+function scatterNow() { socket.emit('scatter', { uid, code: currentCode }); }
+function pickChit(i) {
+  if (busy || !S || S.phase === 'table') return;
+  if (S.stage !== 'pick' || S.pickTurn !== uid || S.taken[i]) return;
+  busy = true;
+  socket.emit('pick', { uid, code: currentCode, chit: i });
+}
+function passChit(v) {
+  if (busy || !S) return;
+  if (S.stage !== 'play' || S.cur !== uid) return;
+  busy = true;
+  socket.emit('pass', { uid, code: currentCode, v });
+}
+function rematch() {
+  if (!S || S.host !== uid) return;
+  socket.emit('rematch', { uid, code: currentCode });
+}
+
+function render() {
+  busy = false;
+  if (!S) { show("home"); return; }
+  if (S.phase === 'lobby') { renderLobby(); return; }
+  if (!S.order || S.order.indexOf(uid) < 0) { show("home"); err("Aap is game ke khiladi nahi ho"); return; }
+  show("gm"); renderGame();
+}
+
+function renderLobby() {
+  show("lobby");
+  $("lc").textContent = currentCode;
+  var ids = S.order, n = ids.length, isH = S.host === uid;
+  $("pl").innerHTML = ids.map(i => "<li>" + esc(S.players[i].name) + (i === S.host ? " 👑" : "") + (i === uid ? " (aap)" : "") + "</li>").join("");
+  $("hostbox").classList.toggle("hide", !isH);
+  $("wait").classList.toggle("hide", isH);
+  if (isH) {
+    for (var i = 0; i < n; i++) if (!cn[i]) cn[i] = FR[i];
+    var box = $("cn");
+    if (box.dataset.n !== String(n)) {
+      box.innerHTML = ""; box.dataset.n = n;
+      for (var j = 0; j < n; j++) {
+        var inp = document.createElement("input");
+        inp.value = cn[j]; inp.maxLength = 10; inp.style.marginTop = "6px";
+        inp.oninput = (function(k, el) { return function() { cn[k] = el.value; }; })(j, inp);
+        box.appendChild(inp);
+      }
+    }
+    $("go").disabled = n < 2;
+    $("go").textContent = n < 2 ? "Kam se kam 2 khiladi chahiye" : "Game shuru karo (" + n + " khiladi)";
+  }
+}
+
+function buildTable(N) {
+  var t = $("table");
+  var w = Math.min(46, Math.floor(Math.sqrt(400 * 340 / (N * N * 1.7))));
+  var h = Math.round(w * 0.78);
+  var pts = [];
+  t.innerHTML = ""; tw = { w: w, h: h }; els = []; sc = [];
+  var seed = S.seed;
+  function r() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    var q = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    q = q + Math.imul(q ^ q >>> 7, 61 | q) ^ q;
+    return ((q ^ q >>> 14) >>> 0) / 4294967296;
+  }
+  for (var i = 0; i < N * N; i++) {
+    var x, y, k = 0, ok;
+    do {
+      x = r() * (400 - w); y = r() * (340 - h);
+      ok = pts.every(q => Math.abs(q[0] - x) > w + 2 || Math.abs(q[1] - y) > h + 2);
+      k++;
+    } while (!ok && k < 60);
+    pts.push([x, y]); sc.push({ x: x, y: y, a: r() * 120 - 60 });
+    var el = document.createElement("button");
+    el.className = "fold"; el.style.transition = "none";
+    el.style.width = (w / 4) + "%"; el.style.height = (h / 3.4) + "%";
+    el.onclick = (function(j) { return function() { pickChit(j); }; })(i);
+    t.appendChild(el); els.push(el);
+  }
+  t.dataset.k = S.seed + "-" + N;
+  setTimeout(() => els.forEach(e => e.style.transition = ""), 80);
+}
+
+function placeTable() {
+  var st = S.phase === 'table';
+  els.forEach((el, i) => {
+    var p = sc[i];
+    if (st) {
+      el.style.left = ((200 - tw.w / 2) / 4) + "%";
+      el.style.top = ((170 - tw.h / 2) / 3.4) + "%";
+      el.style.transform = "rotate(" + (p.a / 4) + "deg)";
+    } else {
+      el.style.left = (p.x / 4) + "%";
+      el.style.top = (p.y / 3.4) + "%";
+      el.style.transform = "rotate(" + p.a + "deg)";
+    }
+    var tk = S.taken[i];
+    el.style.opacity = tk ? "0" : "1";
+    el.style.pointerEvents = (tk || st) ? "none" : "auto";
+  });
+}
+
+function renderGame() {
+  var N = S.order.length, t = $("table");
+  if (t.dataset.k !== S.seed + "-" + N) buildTable(N);
+  placeTable();
+  var turnU = S.stage === 'pick' ? S.pickTurn : (S.stage === 'play' ? S.cur : null);
+  $("strip").innerHTML = S.order.map(u =>
+    "<div class='pl" + (u === turnU ? " on" : "") + "'><b>" + esc(pname(u)) + (u === uid ? " (aap)" : "") + "</b><br>" + S.hands[u].length + " chitthi</div>"
+  ).join("");
+  var isH = S.host === uid;
+  $("scat").classList.toggle("hide", !(S.stage === "table" && isH));
+  var mh = $("mh"), lg;
+  if (S.stage === "table") lg = isH ? "Aap admin ho. Sab chitthi table pe furkao!" : esc(pname(S.host)) + " chitthi furkaa raha hai...";
+  else if (S.stage === "pick") lg = S.pickTurn === uid ? "Aapki baari: table se ek chitthi uthao (" + (S.hands[uid].length + 1) + "/" + N + ")" : esc(pname(S.pickTurn)) + " chitthi utha raha hai...";
+  else if (S.stage === "play") lg = S.cur === uid ? "Aapki baari: ek chitthi chuno aur " + esc(pname(S.turnNext)) + " ko pass karo" : esc(pname(S.cur)) + " chitthi pass kar raha hai...";
+  else lg = "Game khatam!";
+  $("log").innerHTML = lg;
+  var mine = S.stage === "play" && S.cur === uid && !busy;
+  $("me").className = "me" + ((mine || (S.stage === "pick" && S.pickTurn === uid)) ? " on" : "");
+  mh.textContent = "Aapki chitthiyan (" + S.hands[uid].length + ")";
+  var h = $("hand"); h.innerHTML = "";
+  S.hands[uid].slice().sort((a, b) => a - b).forEach(v => {
+    var b = document.createElement("button");
+    b.className = "chit"; b.textContent = S.names[v];
+    b.style.background = colr(v, N); b.disabled = !mine;
+    b.onclick = function() { passChit(v); };
+    h.appendChild(b);
+  });
+  var ov = $("over");
+  if (S.stage === "done") {
+    var w = S.winner;
+    $("ot").textContent = w === uid ? "Aap jeet gaye! 🎉" : pname(w) + " jeet gaya!";
+    $("od").textContent = S.names[S.hands[w][0]] + " ki " + N + " sarkhi chitthi mil gayi.";
+    $("again").classList.toggle("hide", !isH);
+    ov.classList.remove("hide");
+  } else ov.classList.add("hide");
+}
+
+$("mk").onclick = createGame;
+$("jn").onclick = joinGame;
+$("go").onclick = startGame;
+$("scat").onclick = scatterNow;
+$("again").onclick = rematch;
+</script>
+</body>
+</html>
