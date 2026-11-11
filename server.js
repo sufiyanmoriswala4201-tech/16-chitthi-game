@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -106,9 +105,9 @@ io.on('connection', (socket) => {
 
   socket.on('join', ({ uid, name, code }, cb) => {
     const room = rooms[code];
-    if (!room) return cb({ ok: false, error: 'Ye code nahi mila' });
+    if (!room) return cb({ ok: false, error: 'Room not found' });
     if (!room.players[uid] && room.phase !== 'lobby')
-      return cb({ ok: false, error: 'Game shuru ho chuka hai' });
+      return cb({ ok: false, error: 'Game has already started' });
 
     if (!room.players[uid]) {
       const trimmed = String(name).trim();
@@ -116,8 +115,8 @@ io.on('connection', (socket) => {
       const taken = Object.values(room.players).some(
         p => String(p.name).trim().toLowerCase() === lower
       );
-      if (taken) return cb({ ok: false, error: 'Ye naam already taken hai. Doosra naam chuno.' });
-      if (room.order.length >= 6) return cb({ ok: false, error: 'Game full hai (max 6)' });
+      if (taken) return cb({ ok: false, error: 'That name is already taken. Try another.' });
+      if (room.order.length >= 6) return cb({ ok: false, error: 'Room is full (max 6 players)' });
       room.players[uid] = { name: trimmed, t: Date.now() };
       room.order.push(uid);
     }
