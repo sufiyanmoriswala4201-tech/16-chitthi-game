@@ -8,6 +8,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
+
 app.use(express.static(__dirname));
 
 const rooms = {};
@@ -87,6 +88,7 @@ function state(room) {
 function broadcast(room) { io.to(room.code).emit('state', state(room)); }
 
 io.on('connection', (socket) => {
+
   socket.on('create', ({ uid, name }, cb) => {
     const code = genCode();
     const room = {
@@ -95,7 +97,7 @@ io.on('connection', (socket) => {
       picks: [], moves: [], layout: [],
       starter: 0, seed: 0
     };
-    room.players[uid] = { name, t: Date.now() };
+    room.players[uid] = { name: String(name).trim(), t: Date.now() };
     rooms[code] = room;
     socket.join(code);
     cb({ ok: true, code });
@@ -107,30 +109,41 @@ io.on('connection', (socket) => {
     if (!room) return cb({ ok: false, error: 'Ye code nahi mila' });
     if (!room.players[uid] && room.phase !== 'lobby')
       return cb({ ok: false, error: 'Game shuru ho chuka hai' });
+
     if (!room.players[uid]) {
+      const trimmed = String(name).trim();
+      const lower = trimmed.toLowerCase();
+      const taken = Object.values(room.players).some(
+        p => String(p.name).trim().toLowerCase() === lower
+      );
+      if (taken) return cb({ ok: false, error: 'Ye naam already taken hai. Doosra naam chuno.' });
       if (room.order.length >= 6) return cb({ ok: false, error: 'Game full hai (max 6)' });
-      room.players[uid] = { name, t: Date.now() };
+      room.players[uid] = { name: trimmed, t: Date.now() };
       room.order.push(uid);
     }
+
     socket.join(code);
     cb({ ok: true, code });
     broadcast(room);
   });
 
-  socket.on('start', ({ uid, code, names }) => {
+  socket.on('start', ({ uid, code }) => {
     const room = rooms[code];
     if (!room || room.host !== uid || room.phase !== 'lobby') return;
     const n = room.order.length;
     if (n < 2) return;
-    const fallback = ['Aam','Kela','Seb','Angoor','Santra','Papita'];
-    const finalNames = [];
-    for (let i = 0; i < n; i++) {
-      let s = ((names && names[i]) || '').trim() || fallback[i];
-      while (finalNames.includes(s)) s += '*';
-      finalNames.push(s);
-    }
+
+    const seen = {};
+    const finalNames = room.order.map(u => {
+      const nm = room.players[u].name;
+      if (!seen[nm]) { seen[nm] = 1; return nm; }
+      seen[nm]++;
+      return nm + ' ' + seen[nm];
+    });
+
     const vals = [];
     for (let v = 0; v < n; v++) for (let k = 0; k < n; k++) vals.push(v);
+
     room.phase = 'table';
     room.order = shuffle(room.order);
     room.names = finalNames;
@@ -175,6 +188,7 @@ io.on('connection', (socket) => {
       .sort((a, b) => room.players[a].t - room.players[b].t);
     broadcast(room);
   });
+
 });
 
 server.listen(PORT, '0.0.0.0', () => {
