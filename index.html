@@ -83,15 +83,18 @@ input::placeholder{color:var(--mut);font-weight:400}
 .score-chip{margin-left:auto;background:var(--card);border:1px solid var(--line);padding:8px 12px;border-radius:12px;font-size:12px;font-weight:800;color:var(--acc);cursor:pointer;box-shadow:var(--shadow-sm);display:inline-flex;align-items:center;gap:4px}
 .score-chip:active{transform:scale(.97)}
 
-.banner{
-  background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 12%,var(--card)),var(--card));
-  border:1px solid var(--line-strong);
-  padding:10px 14px;border-radius:12px;font-size:12px;font-weight:600;
-  color:var(--fg-2);text-align:center;margin-bottom:12px;
-  display:flex;align-items:center;justify-content:center;gap:8px;
-}
+.banner{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 12%,var(--card)),var(--card));border:1px solid var(--line-strong);padding:10px 14px;border-radius:12px;font-size:12px;font-weight:600;color:var(--fg-2);text-align:center;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px}
 .banner .dot{width:8px;height:8px;border-radius:50%;background:var(--acc);animation:pulseDot 1.5s ease-in-out infinite}
 @keyframes pulseDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+.timer-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:9px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-sm);transition:border-color .2s,background .3s}
+.timer-bar{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+.timer-fill{height:100%;background:var(--acc);transition:width .1s linear,background .3s;border-radius:3px}
+.timer-label{font-size:13px;font-weight:800;color:var(--fg-2);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.timer-row.urgent{border-color:#dc2626;background:color-mix(in srgb,#dc2626 8%,var(--card))}
+.timer-row.urgent .timer-fill{background:#dc2626}
+.timer-row.urgent .timer-label{color:#dc2626;animation:timerPulse .6s ease-in-out infinite}
+@keyframes timerPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 
 .strip{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px}
 .pl{border:2px solid var(--line);border-radius:14px;padding:8px 11px;font-size:11px;background:var(--card);text-align:center;font-weight:500;color:var(--mut);min-width:70px;box-shadow:var(--shadow-sm);transition:border-color .2s,box-shadow .2s,transform .2s}
@@ -170,11 +173,10 @@ input::placeholder{color:var(--mut);font-weight:400}
 <body>
 <main>
 
-  <!-- HOME -->
   <section id="screen-home">
     <div class="logo-mark" aria-hidden="true"><span></span><span></span></div>
     <h1>Sola Chitthi</h1>
-    <div class="sub">N players · N cards · N of a kind wins</div>
+    <div class="sub">N players · N cards each · N of a kind wins</div>
 
     <div class="panel">
       <label for="nm">Your Name</label>
@@ -190,7 +192,6 @@ input::placeholder{color:var(--mut);font-weight:400}
     </div>
   </section>
 
-  <!-- LOBBY -->
   <section id="screen-lobby" class="hide">
     <div class="game-header">
       <button class="icon-btn" id="lobbyBack">←</button>
@@ -198,7 +199,7 @@ input::placeholder{color:var(--mut);font-weight:400}
       <div class="score-chip" id="lobbyScore">🏆 0</div>
     </div>
     <div class="panel" style="text-align:center">
-      <div class="sub" style="margin:0 0 6px">Room Code</div>
+      <div class="sub" style="margin:0 0 6px">Room Code · Round <span id="lobbyRound">1</span></div>
       <div class="code" id="lc">----</div>
       <div class="sub" style="margin:0;font-size:12px">Share this code with friends</div>
     </div>
@@ -212,7 +213,6 @@ input::placeholder{color:var(--mut);font-weight:400}
     </div>
   </section>
 
-  <!-- GAME -->
   <section id="screen-game" class="hide">
     <div class="game-header">
       <button class="icon-btn" id="exitBtn">←</button>
@@ -221,6 +221,10 @@ input::placeholder{color:var(--mut);font-weight:400}
       <div class="score-chip" id="gameScore">🏆 0</div>
     </div>
     <div class="banner"><span class="dot"></span><span id="bannerText">Collect 4 matching cards to win</span></div>
+    <div class="timer-row hide" id="timerRow">
+      <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+      <div class="timer-label">⏱ <span id="timerText">10</span>s</div>
+    </div>
     <div class="strip" id="strip"></div>
     <div class="log" id="log"></div>
     <div class="table" id="table"></div>
@@ -228,7 +232,6 @@ input::placeholder{color:var(--mut);font-weight:400}
     <div class="me" id="me"><h2 id="mh"></h2><div class="hand" id="hand"></div></div>
   </section>
 
-  <!-- WINNER OVERLAY -->
   <div id="winOver" class="over hide">
     <div class="panel">
       <span class="win-emoji">🏆</span>
@@ -239,7 +242,6 @@ input::placeholder{color:var(--mut);font-weight:400}
     </div>
   </div>
 
-  <!-- CLAIM OVERLAY -->
   <div id="claimOver" class="over hide">
     <div class="panel">
       <span class="win-emoji">🎯</span>
@@ -255,7 +257,6 @@ input::placeholder{color:var(--mut);font-weight:400}
     </div>
   </div>
 
-  <!-- SCORED OVERLAY (full rankings) -->
   <div id="scoredOver" class="over hide">
     <div class="panel">
       <h2>Round Results</h2>
@@ -266,7 +267,6 @@ input::placeholder{color:var(--mut);font-weight:400}
     </div>
   </div>
 
-  <!-- LEADERBOARD OVERLAY -->
   <div id="lbOver" class="over hide">
     <div class="panel">
       <div class="header-over">
@@ -288,8 +288,10 @@ var socket = io();
 var uid = localStorage.getItem('uid');
 if (!uid) { uid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('uid', uid); }
 var myName = '', myChit = '', currentCode = null, S = null, busy = false;
-var els = [], sc = [], tw = { w: 0, h: 0 }, prevRankings = [];
+var els = [], sc = [], tw = { w: 0, h: 0 }, serverOffset = 0;
 var POINTS_TABLE = {
+  2: [1000, 500],
+  3: [1000, 700, 400],
   4: [1000, 800, 600, 400],
   5: [1000, 800, 600, 400, 200],
   6: [1000, 850, 700, 550, 400, 250],
@@ -303,7 +305,7 @@ function $(i){return document.getElementById(i)}
 function show(id){["screen-home","screen-lobby","screen-game"].forEach(s=>$(s).classList.toggle("hide",s!==id))}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 function err(t){$("msg").textContent=t;setTimeout(()=>{$("msg").textContent=""},4000)}
-function toast(t){var e=$("toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),2200)}
+function toast(t){var e=$("toast");e.textContent=t;e.classList.add("show");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("show"),2500)}
 function pname(u){return S&&S.players[u]?S.players[u].name:"Player"}
 function colr(v,N){return "hsl("+Math.round(v*360/N)+",72%,78%)"}
 
@@ -311,9 +313,13 @@ $("nm").value = localStorage.getItem('nm') || '';
 $("chitName").value = localStorage.getItem('chit') || '';
 
 socket.on('state', (s) => {
-  prevRankings = (S && S.rankings) ? S.rankings.slice() : [];
+  if (s.serverNow) serverOffset = s.serverNow - Date.now();
   S = s; currentCode = s.code;
   render();
+});
+
+socket.on('autoPassed', (data) => {
+  toast("⏱ " + data.name + " ran out of time — auto-passed!");
 });
 
 socket.on('connect', () => {
@@ -355,31 +361,42 @@ function pickChit(i){
   if (S.stage !== 'pick' || S.pickTurn !== uid || S.taken[i]) return;
   busy = true;
   socket.emit('pick', {uid, code: currentCode, chit: i});
-  setTimeout(()=>{busy=false}, 300);
 }
 function passChit(v){
   if (busy || !S) return;
   if (S.stage !== 'play' || S.cur !== uid) return;
   busy = true;
   socket.emit('pass', {uid, code: currentCode, v});
-  setTimeout(()=>{busy=false}, 300);
 }
 function claimRank(){ socket.emit('claim', {uid, code: currentCode}); }
 function nextRound(){ socket.emit('nextRound', {uid, code: currentCode}); }
 
+function hideAllOverlays(){
+  ["winOver","claimOver","scoredOver","lbOver"].forEach(id => $(id).classList.add("hide"));
+}
+
 function render(){
   busy = false;
-  if (!S) { show("screen-home"); return; }
-  if (S.phase === 'lobby') { renderLobby(); return; }
-  if (!S.order || S.order.indexOf(uid) < 0) { show("screen-home"); err("You're not in this game"); return; }
+  if (!S) { show("screen-home"); hideAllOverlays(); return; }
+  if (S.phase === 'lobby') {
+    show("screen-lobby");
+    hideAllOverlays();
+    renderLobby();
+    return;
+  }
+  if (!S.order || S.order.indexOf(uid) < 0) {
+    show("screen-home"); hideAllOverlays();
+    err("You're not in this game");
+    return;
+  }
   show("screen-game");
   renderGame();
   renderOverlays();
 }
 
 function renderLobby(){
-  show("screen-lobby");
   $("lc").textContent = currentCode;
+  $("lobbyRound").textContent = S.roundNumber || 1;
   var ids = S.order;
   $("pl").innerHTML = ids.map(i => {
     var p = S.players[i];
@@ -392,16 +409,16 @@ function renderLobby(){
   $("hostbox").classList.toggle("hide", !isH);
   $("wait").classList.toggle("hide", isH);
   if (isH) {
-    var M = n<=5?4:(n===6?5:(n<=8?6:7));
-    $("rulesInfo").innerHTML = "Each player receives <b>"+M+" cards</b> with their own label.<br>First to collect <b>"+M+" matching cards</b> wins!<br><b>"+n+" player"+(n>1?"s":"")+"</b> in room";
+    var M = n<=4?n:(n===5?4:(n===6?5:(n<=8?6:7)));
+    $("rulesInfo").innerHTML = "Each player picks <b>"+n+" cards</b> with their own label.<br>Total <b>"+(n*n)+" cards</b> on the table.<br>First to collect <b>"+M+" matching cards</b> wins!<br><b>"+n+" player"+(n>1?"s":"")+"</b> in room";
     $("go").disabled = n < 2;
     $("go").textContent = n < 2 ? "Need at least 2 players" : "Start Game ("+n+" players)";
   }
 }
 
-function buildTable(N, M){
+function buildTable(N){
   var t = $("table");
-  var total = N * M;
+  var total = N * N;
   t.innerHTML = ""; els = []; sc = [];
   var seed = S.seed;
   function r(){seed|=0;seed=seed+0x6D2B79F5|0;var q=Math.imul(seed^seed>>>15,1|seed);q=q+Math.imul(q^q>>>7,61|q)^q;return((q^q>>>14)>>>0)/4294967296}
@@ -439,7 +456,7 @@ function buildTable(N, M){
       t.appendChild(el); els.push(el);
     }
   }
-  t.dataset.k = S.seed+"-"+N+"-"+M;
+  t.dataset.k = S.seed+"-"+N+"-"+total;
   setTimeout(()=>els.forEach(e=>e.style.transition=""), 80);
 }
 
@@ -465,14 +482,13 @@ function placeTable(){
 
 function renderGame(){
   var N = S.order.length, M = S.winNeed, t = $("table");
-  if (t.dataset.k !== S.seed+"-"+N+"-"+M) buildTable(N, M);
+  if (t.dataset.k !== S.seed+"-"+N+"-"+(N*N)) buildTable(N);
   placeTable();
 
   $("gameCode").textContent = currentCode;
   $("gameRound").textContent = S.roundNumber || 1;
   var myPts = S.players[uid] ? S.players[uid].points : 0;
   $("gameScore").textContent = "🏆 " + myPts.toLocaleString();
-
   $("bannerText").textContent = "Collect " + M + " matching cards to win";
 
   var turnU = S.stage==='pick' ? S.pickTurn : (S.stage==='play' ? S.cur : null);
@@ -518,21 +534,21 @@ function renderGame(){
 }
 
 function renderOverlays(){
+  hideAllOverlays();
   var N = S.order.length;
   var pts = POINTS_TABLE[N] || [];
-  var ovWin = $("winOver"), ovClaim = $("claimOver"), ovScored = $("scoredOver");
 
   if (S.phase === 'ranking') {
     var winner = S.rankings[0];
-    var winnerName = pname(winner);
-    var winningChit = S.names[S.winningType];
+    if (!winner) return;
+    var winningChit = S.names[S.winningType] || "?";
     if (uid === winner) {
-      ovWin.classList.remove("hide"); ovClaim.classList.add("hide"); ovScored.classList.add("hide");
+      $("winOver").classList.remove("hide");
       $("winSub").textContent = "Collected all " + S.winNeed + " \"" + winningChit + "\" cards!";
       $("winPts").textContent = "+" + (pts[0] || 1000) + " pts";
     } else {
-      ovWin.classList.add("hide"); ovClaim.classList.remove("hide"); ovScored.classList.add("hide");
-      $("claimWinner").textContent = winnerName + " won with " + S.winNeed + " \"" + winningChit + "\" cards";
+      $("claimOver").classList.remove("hide");
+      $("claimWinner").textContent = pname(winner) + " won with " + S.winNeed + " \"" + winningChit + "\" cards";
       var myIdx = S.rankings.indexOf(uid);
       if (myIdx >= 0) {
         $("claimedBox").classList.remove("hide");
@@ -548,10 +564,10 @@ function renderOverlays(){
       }
     }
   } else if (S.phase === 'scored') {
-    ovWin.classList.add("hide"); ovClaim.classList.add("hide"); ovScored.classList.remove("hide");
+    $("scoredOver").classList.remove("hide");
     $("scoredSub").textContent = "Round " + (S.roundNumber || 1) + " complete";
     $("rankingsList").innerHTML = S.rankings.map((u, i) => {
-      var p = S.players[u];
+      var p = S.players[u] || {name:"?", points:0};
       var earned = (S.lastRoundPoints && S.lastRoundPoints[u]) || 0;
       return "<div class='rank-row"+(u===uid?" me":"")+"'>"+
         "<div class='pos pos-"+(i+1)+"'>"+posLabel(i+1)+"</div>"+
@@ -559,10 +575,9 @@ function renderOverlays(){
         "<div class='pts'>+"+earned.toLocaleString()+"<small>"+(p.points||0).toLocaleString()+" total</small></div>"+
       "</div>";
     }).join("");
-    $("nextRoundBtn").classList.toggle("hide", S.host !== uid);
-    $("closeScored").classList.toggle("hide", S.host === uid);
-  } else {
-    ovWin.classList.add("hide"); ovClaim.classList.add("hide"); ovScored.classList.add("hide");
+    var isHost = (S.host === uid);
+    $("nextRoundBtn").classList.toggle("hide", !isHost);
+    $("closeScored").classList.toggle("hide", isHost);
   }
 }
 
@@ -572,8 +587,7 @@ function ordinal(n){ return n===1?"1st":n===2?"2nd":n===3?"3rd":n+"th"; }
 
 function openLeaderboard(){
   if (!S) return;
-  var N = S.order.length;
-  var arr = S.order.map(u => ({uid:u, name:S.players[u].name, pts:S.players[u].points||0, rounds:S.players[u].rounds||0}));
+  var arr = S.order.map(u => ({uid:u, name:S.players[u].name, pts:S.players[u].points||0}));
   arr.sort((a,b)=>b.pts-a.pts);
   $("lbSub").textContent = (S.roundNumber||1) + " round" + ((S.roundNumber||1)>1?"s":"") + " played";
   $("lbList").innerHTML = arr.map((x, i) =>
@@ -586,6 +600,27 @@ function openLeaderboard(){
   $("lbOver").classList.remove("hide");
 }
 
+/* ====== TIMER UI ====== */
+
+function updateTimerUI() {
+  var row = $("timerRow");
+  if (!S || S.stage !== 'play' || !S.turnDeadline || !S.turnDuration) {
+    row.classList.add("hide");
+    return;
+  }
+  row.classList.remove("hide");
+  var now = Date.now() + serverOffset;
+  var remaining = Math.max(0, (S.turnDeadline - now) / 1000);
+  var pct = Math.max(0, Math.min(100, (remaining / S.turnDuration) * 100));
+  $("timerText").textContent = Math.ceil(remaining);
+  $("timerFill").style.width = pct + "%";
+  if (remaining <= 3) row.classList.add("urgent");
+  else row.classList.remove("urgent");
+}
+setInterval(updateTimerUI, 100);
+
+/* ====== EVENTS ====== */
+
 $("mk").onclick = createGame;
 $("jn").onclick = joinGame;
 $("go").onclick = startGame;
@@ -596,23 +631,15 @@ $("gameScore").onclick = openLeaderboard;
 $("lobbyScore").onclick = openLeaderboard;
 $("closeScored").onclick = function(){ $("scoredOver").classList.add("hide"); };
 $("closeLb").onclick = function(){ $("lbOver").classList.add("hide"); };
-$("lobbyBack").onclick = function(){
-  currentCode = null; S = null;
-  show("screen-home");
-};
-$("exitBtn").onclick = function(){
-  currentCode = null; S = null;
-  show("screen-home");
-};
+$("lobbyBack").onclick = function(){ currentCode = null; S = null; show("screen-home"); };
+$("exitBtn").onclick = function(){ currentCode = null; S = null; show("screen-home"); };
 
 var _lastRankCount = 0;
 socket.on('state', (s) => {
   if (s.phase === 'ranking' && s.rankings.length > _lastRankCount && _lastRankCount > 0) {
     var newUid = s.rankings[s.rankings.length - 1];
     var idx = s.rankings.length - 1;
-    if (newUid !== uid) {
-      toast(pname(newUid) + " claimed " + ordinal(idx+1) + "!");
-    }
+    if (newUid !== uid) toast(pname(newUid) + " claimed " + ordinal(idx+1) + "!");
   }
   _lastRankCount = (s.rankings || []).length;
 });
