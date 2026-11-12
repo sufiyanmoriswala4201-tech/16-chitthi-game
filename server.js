@@ -12,14 +12,24 @@ app.use(express.static(__dirname));
 const rooms = {};
 
 const POINTS_TABLE = {
-  4:  [1000, 800, 600, 400],
-  5:  [1000, 800, 600, 400, 200],
-  6:  [1000, 850, 700, 550, 400, 250],
-  7:  [1000, 850, 700, 550, 400, 250, 100],
-  8:  [1000, 875, 750, 625, 500, 375, 250, 125],
-  9:  [1000, 900, 800, 700, 600, 500, 400, 300, 200],
+  2: [1000, 500],
+  3: [1000, 700, 400],
+  4: [1000, 800, 600, 400],
+  5: [1000, 800, 600, 400, 200],
+  6: [1000, 850, 700, 550, 400, 250],
+  7: [1000, 850, 700, 550, 400, 250, 100],
+  8: [1000, 875, 750, 625, 500, 375, 250, 125],
+  9: [1000, 900, 800, 700, 600, 500, 400, 300, 200],
   10: [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100]
 };
+
+function winNeed(N) {
+  if (N <= 4) return N;
+  if (N === 5) return 4;
+  if (N === 6) return 5;
+  if (N <= 8) return 6;
+  return 7;
+}
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -44,28 +54,24 @@ function won(hand, needed) {
   return false;
 }
 
-function winNeed(N) {
-  if (N <= 5) return 4;
-  if (N === 6) return 5;
-  if (N <= 8) return 6;
-  return 7;
+function findWinningType(hand, M) {
+  const c = {};
+  for (const x of hand) c[x] = (c[x] || 0) + 1;
+  for (const k in c) if (c[k] >= M) return parseInt(k);
+  return -1;
 }
 
 function computeState(room) {
   const N = room.order.length;
   const M = room.winNeed || 4;
-  const totalCards = N * M;
+  const totalCards = N * N;
   const hands = {}, taken = {};
   const S = {
     N, M, hands, taken,
     stage: 'table',
     pickTurn: null, cur: null, next: null, winner: null,
-    remainingInTurn: 0,
-    rankings: room.rankings || [],
-    rankingDeadline: room.rankingDeadline || 0,
-    winningType: null
+    remainingInTurn: 0, winningType: null
   };
-
   for (const u of room.order) hands[u] = [];
   if (room.phase === 'table' || room.phase === 'lobby') return S;
 
@@ -76,7 +82,6 @@ function computeState(room) {
     }
   }
 
-  // If already in ranking/scored phase, return current hands + stage
   if (room.phase === 'ranking' || room.phase === 'scored') {
     S.stage = room.phase === 'scored' ? 'scored' : 'ranking';
     S.winner = room.rankings[0] || null;
@@ -84,15 +89,13 @@ function computeState(room) {
     return S;
   }
 
-  // Still picking
   if (room.picks.length < totalCards) {
     S.stage = 'pick';
-    S.pickTurn = room.order[Math.floor(room.picks.length / M)];
-    S.remainingInTurn = M - (room.picks.length % M);
+    S.pickTurn = room.order[Math.floor(room.picks.length / N)];
+    S.remainingInTurn = N - (room.picks.length % N);
     return S;
   }
 
-  // Check win from picks
   for (let i = 0; i < N; i++) {
     if (won(hands[room.order[i]], M)) {
       S.winner = room.order[i];
@@ -102,7 +105,6 @@ function computeState(room) {
     }
   }
 
-  // Play phase
   let t = room.starter;
   for (const m of room.moves) {
     const f = room.order[t], to = room.order[(t + 1) % N];
@@ -125,13 +127,6 @@ function computeState(room) {
   return S;
 }
 
-function findWinningType(hand, M) {
-  const c = {};
-  for (const x of hand) c[x] = (c[x] || 0) + 1;
-  for (const k in c) if (c[k] >= M) return parseInt(k);
-  return -1;
-}
-
 function state(room) {
   const S = computeState(room);
   return {
@@ -142,15 +137,65 @@ function state(room) {
     winner: S.winner, winningType: S.winningType,
     hands: S.hands, taken: S.taken,
     winNeed: room.winNeed || 4, remainingInTurn: S.remainingInTurn,
-    rankings: room.rankings || [], rankingDeadline: room.rankingDeadline || 0,
+    rankings: Array.isArray(room.rankings) ? room.rankings : [],
+    rankingDeadline: room.rankingDeadline || 0,
     roundNumber: room.roundNumber || 1,
-    lastRoundPoints: room.lastRoundPoints || null
+    lastRoundPoints: room.lastRoundPoints || null,
+    serverNow: Date.now(),
+    turnDeadline: room.turnDeadline || 0,
+    turnDuration: room.turnDuration || 0
   };
 }
 
 function broadcast(room) { io.to(room.code).emit('state', state(room)); }
 
+/* ====== PASS TIMER ====== */
+
+function clearPassTimer(room) {
+  if (room._passTimer) {
+    clearTimeout(room._passTimer);
+    room._passTimer = null;
+  }
+  room.turnDeadline = 0;
+  room.turnDuration = 0;
+}
+
+function startPassTimer(room, precomputed) {
+  clearPassTimer(room);
+  const S = precomputed || computeState(room);
+  if (S.stage !== 'play') return;
+  const N = room.order.length;
+  const cycle = Math.floor(room.moves.length / N);
+  const duration = Math.max(3, 10 - cycle);
+  room.turnDuration = duration;
+  room.turnDeadline = Date.now() + duration * 1000;
+  room._passTimer = setTimeout(() => autoPass(room), duration * 1000);
+  console.log('[TIMER] ' + room.code + ' cycle=' + cycle + ' duration=' + duration + 's');
+}
+
+function autoPass(room) {
+  const S = computeState(room);
+  if (S.stage !== 'play' || !S.cur) return;
+  const uid = S.cur;
+  const hand = S.hands[uid] || [];
+  if (hand.length === 0) return;
+  const v = hand[Math.floor(Math.random() * hand.length)];
+  room.moves.push({ uid, v, auto: true });
+  console.log('[AUTO_PASS] ' + room.code + ' player=' + uid);
+  io.to(room.code).emit('autoPassed', { name: room.players[uid].name });
+  const newS = computeState(room);
+  if (newS.stage === 'gameover') {
+    enterRanking(room, newS.winner);
+  } else {
+    startPassTimer(room, newS);
+    broadcast(room);
+  }
+}
+
+/* ====== RANKING / SCORING ====== */
+
 function enterRanking(room, winner) {
+  clearPassTimer(room);
   room.phase = 'ranking';
   room.rankings = [winner];
   room.rankingDeadline = Date.now() + 30000;
@@ -183,6 +228,8 @@ function finishScoring(room) {
   broadcast(room);
 }
 
+/* ====== SOCKETS ====== */
+
 io.on('connection', (socket) => {
 
   socket.on('create', ({ uid, name, chit }, cb) => {
@@ -198,9 +245,7 @@ io.on('connection', (socket) => {
     room.players[uid] = {
       name: String(name).trim(),
       chit: String(chit).trim(),
-      t: Date.now(),
-      points: 0,
-      rounds: 0
+      t: Date.now(), points: 0, rounds: 0
     };
     rooms[code] = room;
     socket.join(code);
@@ -232,11 +277,8 @@ io.on('connection', (socket) => {
       if (room.order.length >= 10) return cb({ ok: false, error: 'Room is full (max 10 players)' });
 
       room.players[uid] = {
-        name: trimmedName,
-        chit: trimmedChit,
-        t: Date.now(),
-        points: 0,
-        rounds: 0
+        name: trimmedName, chit: trimmedChit,
+        t: Date.now(), points: 0, rounds: 0
       };
       room.order.push(uid);
     }
@@ -257,7 +299,9 @@ io.on('connection', (socket) => {
     room.names = room.order.map(u => room.players[u].chit);
 
     const vals = [];
-    for (let v = 0; v < n; v++) for (let k = 0; k < M; k++) vals.push(v);
+    for (let v = 0; v < n; v++) {
+      for (let k = 0; k < n; k++) vals.push(v);
+    }
 
     room.phase = 'table';
     room.layout = shuffle(vals);
@@ -288,6 +332,9 @@ io.on('connection', (socket) => {
     const newS = computeState(room);
     if (newS.stage === 'gameover') {
       enterRanking(room, newS.winner);
+    } else if (newS.stage === 'play') {
+      startPassTimer(room, newS);
+      broadcast(room);
     } else {
       broadcast(room);
     }
@@ -298,11 +345,13 @@ io.on('connection', (socket) => {
     if (!room || room.phase !== 'scatter') return;
     const S = computeState(room);
     if (S.stage !== 'play' || S.cur !== uid) return;
+    clearPassTimer(room);
     room.moves.push({ uid, v });
     const newS = computeState(room);
     if (newS.stage === 'gameover') {
       enterRanking(room, newS.winner);
     } else {
+      startPassTimer(room, newS);
       broadcast(room);
     }
   });
@@ -322,6 +371,7 @@ io.on('connection', (socket) => {
   socket.on('nextRound', ({ uid, code }) => {
     const room = rooms[code];
     if (!room || room.host !== uid || room.phase !== 'scored') return;
+    clearPassTimer(room);
     room.phase = 'lobby';
     room.picks = [];
     room.moves = [];
