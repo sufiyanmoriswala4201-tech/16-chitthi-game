@@ -5,15 +5,12 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 const PORT = process.env.PORT || 3000;
 app.use(express.static(__dirname));
 
 const rooms = {};
 
 const POINTS_TABLE = {
-  2: [1000, 500],
-  3: [1000, 700, 400],
   4: [1000, 800, 600, 400],
   5: [1000, 800, 600, 400, 200],
   6: [1000, 850, 700, 550, 400, 250],
@@ -24,8 +21,7 @@ const POINTS_TABLE = {
 };
 
 function winNeed(N) {
-  if (N <= 4) return N;
-  if (N === 5) return 4;
+  if (N <= 5) return 4;
   if (N === 6) return 5;
   if (N <= 8) return 6;
   return 7;
@@ -67,8 +63,7 @@ function computeState(room) {
   const totalCards = N * N;
   const hands = {}, taken = {};
   const S = {
-    N, M, hands, taken,
-    stage: 'table',
+    N, M, hands, taken, stage: 'table',
     pickTurn: null, cur: null, next: null, winner: null,
     remainingInTurn: 0, winningType: null
   };
@@ -143,21 +138,16 @@ function state(room) {
     lastRoundPoints: room.lastRoundPoints || null,
     serverNow: Date.now(),
     turnDeadline: room.turnDeadline || 0,
-    turnDuration: room.turnDuration || 0
+    turnDuration: room.turnDuration || 0,
+    botCount: room.order.filter(u => room.players[u] && room.players[u].isBot).length
   };
 }
 
 function broadcast(room) { io.to(room.code).emit('state', state(room)); }
 
-/* ====== PASS TIMER ====== */
-
 function clearPassTimer(room) {
-  if (room._passTimer) {
-    clearTimeout(room._passTimer);
-    room._passTimer = null;
-  }
-  room.turnDeadline = 0;
-  room.turnDuration = 0;
+  if (room._passTimer) { clearTimeout(room._passTimer); room._passTimer = null; }
+  room.turnDeadline = 0; room.turnDuration = 0;
 }
 
 function startPassTimer(room, precomputed) {
@@ -170,7 +160,6 @@ function startPassTimer(room, precomputed) {
   room.turnDuration = duration;
   room.turnDeadline = Date.now() + duration * 1000;
   room._passTimer = setTimeout(() => autoPass(room), duration * 1000);
-  console.log('[TIMER] ' + room.code + ' cycle=' + cycle + ' duration=' + duration + 's');
 }
 
 function autoPass(room) {
@@ -181,7 +170,6 @@ function autoPass(room) {
   if (hand.length === 0) return;
   const v = hand[Math.floor(Math.random() * hand.length)];
   room.moves.push({ uid, v, auto: true });
-  console.log('[AUTO_PASS] ' + room.code + ' player=' + uid);
   io.to(room.code).emit('autoPassed', { name: room.players[uid].name });
   const newS = computeState(room);
   if (newS.stage === 'gameover') {
@@ -189,17 +177,109 @@ function autoPass(room) {
   } else {
     startPassTimer(room, newS);
     broadcast(room);
+    scheduleBotIfNeeded(room);
   }
 }
 
-/* ====== RANKING / SCORING ====== */
+/* ===== BOT LOGIC ===== */
+
+function clearBotTimers(room) {
+  if (room._botTimer) { clearTimeout(room._botTimer); room._botTimer = null; }
+  if (room._botClaimTimers) {
+    Object.values(room._botClaimTimers).forEach(t => clearTimeout(t));
+    room._botClaimTimers = {};
+  }
+}
+
+function scheduleBotIfNeeded(room) {
+  if (!room) return;
+  if (room._botTimer) return;
+  const S = computeState(room);
+  const target = (S.stage === 'pick' && S.pickTurn) || (S.stage === 'play' && S.cur);
+  if (!target) return;
+  if (!room.players[target] || !room.players[target].isBot) return;
+
+  const delay = 700 + Math.random() * 900;
+  room._botTimer = setTimeout(() => {
+    room._botTimer = null;
+    executeBotMove(room);
+  }, delay);
+}
+
+function executeBotMove(room) {
+  if (!rooms[room.code] || rooms[room.code] !== room) return;
+  const S = computeState(room);
+
+  if (S.stage === 'pick' && S.pickTurn && room.players[S.pickTurn] && room.players[S.pickTurn].isBot) {
+    const avail = [];
+    for (let i = 0; i < room.layout.length; i++) if (!S.taken[i]) avail.push(i);
+    if (avail.length === 0) return;
+    const chit = avail[Math.floor(Math.random() * avail.length)];
+    room.picks.push({ uid: S.pickTurn, chit });
+    const newS = computeState(room);
+    if (newS.stage === 'gameover') {
+      enterRanking(room, newS.winner);
+    } else if (newS.stage === 'play') {
+      startPassTimer(room, newS);
+      broadcast(room);
+      scheduleBotIfNeeded(room);
+    } else {
+      broadcast(room);
+      scheduleBotIfNeeded(room);
+    }
+  } else if (S.stage === 'play' && S.cur && room.players[S.cur] && room.players[S.cur].isBot) {
+    const hand = S.hands[S.cur];
+    if (hand.length === 0) return;
+    const counts = {};
+    hand.forEach(v => counts[v] = (counts[v] || 0) + 1);
+    let best = hand[0], bestCount = counts[hand[0]];
+    for (const v of hand) if (counts[v] < bestCount) { best = v; bestCount = counts[v]; }
+    clearPassTimer(room);
+    room.moves.push({ uid: S.cur, v: best });
+    const newS = computeState(room);
+    if (newS.stage === 'gameover') {
+      enterRanking(room, newS.winner);
+    } else {
+      startPassTimer(room, newS);
+      broadcast(room);
+      scheduleBotIfNeeded(room);
+    }
+  }
+}
+
+function scheduleBotClaims(room) {
+  if (!room || room.phase !== 'ranking') return;
+  if (!room._botClaimTimers) room._botClaimTimers = {};
+  room.order.forEach(botId => {
+    if (!room.players[botId] || !room.players[botId].isBot) return;
+    if (room.rankings.includes(botId)) return;
+    if (room._botClaimTimers[botId]) return;
+    const delay = 1200 + Math.random() * 2200;
+    room._botClaimTimers[botId] = setTimeout(() => {
+      delete room._botClaimTimers[botId];
+      if (rooms[room.code] !== room) return;
+      if (room.phase !== 'ranking') return;
+      if (room.rankings.includes(botId)) return;
+      room.rankings.push(botId);
+      if (room.rankings.length >= room.order.length) {
+        finishScoring(room);
+      } else {
+        broadcast(room);
+      }
+    }, delay);
+  });
+}
+
+/* ===== RANKING ===== */
 
 function enterRanking(room, winner) {
   clearPassTimer(room);
+  clearBotTimers(room);
   room.phase = 'ranking';
   room.rankings = [winner];
   room.rankingDeadline = Date.now() + 30000;
   setTimeout(() => autoFillRanks(room), 30000);
+  scheduleBotClaims(room);
   broadcast(room);
 }
 
@@ -215,6 +295,7 @@ function autoFillRanks(room) {
 function finishScoring(room) {
   if (room.phase === 'scored') return;
   room.phase = 'scored';
+  clearBotTimers(room);
   const N = room.order.length;
   const points = POINTS_TABLE[N] || [];
   const earned = {};
@@ -228,7 +309,7 @@ function finishScoring(room) {
   broadcast(room);
 }
 
-/* ====== SOCKETS ====== */
+/* ===== SOCKETS ===== */
 
 io.on('connection', (socket) => {
 
@@ -240,12 +321,13 @@ io.on('connection', (socket) => {
       picks: [], moves: [], layout: [],
       starter: 0, seed: 0, winNeed: 0,
       rankings: [], rankingDeadline: 0,
-      roundNumber: 1, lastRoundPoints: null
+      roundNumber: 1, lastRoundPoints: null,
+      _botTimer: null, _botClaimTimers: {}, _passTimer: null
     };
     room.players[uid] = {
       name: String(name).trim(),
       chit: String(chit).trim(),
-      t: Date.now(), points: 0, rounds: 0
+      t: Date.now(), points: 0, rounds: 0, isBot: false
     };
     rooms[code] = room;
     socket.join(code);
@@ -278,7 +360,7 @@ io.on('connection', (socket) => {
 
       room.players[uid] = {
         name: trimmedName, chit: trimmedChit,
-        t: Date.now(), points: 0, rounds: 0
+        t: Date.now(), points: 0, rounds: 0, isBot: false
       };
       room.order.push(uid);
     }
@@ -288,20 +370,59 @@ io.on('connection', (socket) => {
     broadcast(room);
   });
 
+  socket.on('addBot', ({ uid, code }, cb) => {
+    const room = rooms[code];
+    if (!room || room.host !== uid || room.phase !== 'lobby') return cb && cb({ ok: false });
+    if (room.order.length >= 10) return cb && cb({ ok: false, error: 'Room is full' });
+    const botCount = room.order.filter(u => room.players[u] && room.players[u].isBot).length;
+    if (botCount >= 3) return cb && cb({ ok: false, error: 'Max 3 bots' });
+
+    let num = botCount + 1;
+    let botName = 'Bot ' + num;
+    const names = Object.values(room.players).map(p => p.name.toLowerCase());
+    while (names.includes(botName.toLowerCase())) { num++; botName = 'Bot ' + num; }
+
+    let cNum = num;
+    let botChit = '🤖' + cNum;
+    const chits = Object.values(room.players).map(p => p.chit.toLowerCase());
+    while (chits.includes(botChit.toLowerCase())) { cNum++; botChit = '🤖' + cNum; }
+
+    const botId = 'bot_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+    room.players[botId] = {
+      name: botName, chit: botChit,
+      t: Date.now(), points: 0, rounds: 0, isBot: true
+    };
+    room.order.push(botId);
+    cb && cb({ ok: true });
+    broadcast(room);
+  });
+
+  socket.on('removeBot', ({ uid, code }, cb) => {
+    const room = rooms[code];
+    if (!room || room.host !== uid || room.phase !== 'lobby') return cb && cb({ ok: false });
+    const bots = room.order.filter(u => room.players[u] && room.players[u].isBot);
+    if (bots.length === 0) return cb && cb({ ok: false });
+    const botId = bots[bots.length - 1];
+    delete room.players[botId];
+    room.order = room.order.filter(u => u !== botId);
+    cb && cb({ ok: true });
+    broadcast(room);
+  });
+
   socket.on('start', ({ uid, code }) => {
     const room = rooms[code];
     if (!room || room.host !== uid || room.phase !== 'lobby') return;
     const n = room.order.length;
-    if (n < 2) return;
+    if (n < 4) return;
 
+    clearBotTimers(room);
+    clearPassTimer(room);
     const M = winNeed(n);
     room.order = shuffle(room.order);
     room.names = room.order.map(u => room.players[u].chit);
 
     const vals = [];
-    for (let v = 0; v < n; v++) {
-      for (let k = 0; k < n; k++) vals.push(v);
-    }
+    for (let v = 0; v < n; v++) for (let k = 0; k < n; k++) vals.push(v);
 
     room.phase = 'table';
     room.layout = shuffle(vals);
@@ -321,6 +442,7 @@ io.on('connection', (socket) => {
     if (!room || room.host !== uid || room.phase !== 'table') return;
     room.phase = 'scatter';
     broadcast(room);
+    scheduleBotIfNeeded(room);
   });
 
   socket.on('pick', ({ uid, code, chit }) => {
@@ -335,8 +457,10 @@ io.on('connection', (socket) => {
     } else if (newS.stage === 'play') {
       startPassTimer(room, newS);
       broadcast(room);
+      scheduleBotIfNeeded(room);
     } else {
       broadcast(room);
+      scheduleBotIfNeeded(room);
     }
   });
 
@@ -353,6 +477,7 @@ io.on('connection', (socket) => {
     } else {
       startPassTimer(room, newS);
       broadcast(room);
+      scheduleBotIfNeeded(room);
     }
   });
 
@@ -371,6 +496,7 @@ io.on('connection', (socket) => {
   socket.on('nextRound', ({ uid, code }) => {
     const room = rooms[code];
     if (!room || room.host !== uid || room.phase !== 'scored') return;
+    clearBotTimers(room);
     clearPassTimer(room);
     room.phase = 'lobby';
     room.picks = [];
